@@ -8,30 +8,34 @@ import (
 	"net/http"
 	// "path/filepath"
 	"strings"
-	"time"
+	// "time"
+	"strconv"
 
 	"csz.net/tgstate/assets"
 	"csz.net/tgstate/conf"
 	"csz.net/tgstate/utils"
 )
 
+// 全局常量
+const TemplatesPath string = "templates_min"
+
 // UploadImageAPI 上传文件api
 func UploadImageAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method == http.MethodPost {
 		// 获取上传的文件
-		file, header, err := r.FormFile("image")
+		file, header, err := r.FormFile("file")
 		if err != nil {
 			errJsonMsg("Unable to get file", w)
 			// http.Error(w, "Unable to get file", http.StatusBadRequest)
 			return
 		}
 		defer file.Close()
-		// if conf.Mode != "p" && r.ContentLength > 20*1024*1024 {
-		// 	// 检查文件大小
-		// 	errJsonMsg("File size exceeds 20MB limit", w)
-		// 	return
-		// }
+		if conf.Mode != "p" && r.ContentLength > 20*1024*1024 {
+			// 检查文件大小
+			errJsonMsg("File size exceeds 20MB limit", w)
+			return
+		}
 		// 检查文件类型
 		// allowedExts := []string{".jpg", ".jpeg", ".png", ".webp"}
 		// ext := filepath.Ext(header.Filename)
@@ -79,6 +83,8 @@ func errJsonMsg(msg string, w http.ResponseWriter) {
 }
 func D(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	fileName := r.FormValue("filename")
+
 	id := strings.TrimPrefix(path, conf.FileRoute)
 	if id == "" {
 		// 设置响应的状态码为 404
@@ -95,17 +101,26 @@ func D(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	w.Header().Set("Content-Disposition", "inline") // 设置为 "inline" 以支持在线播放
+	// w.Header().Set("Content-Disposition", "inline") // 设置为 "inline" 以支持在线播放
 	// 检查Content-Type是否为图片类型
-	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/octet-stream") {
-		// 设置响应的状态码为 404
-		w.WriteHeader(http.StatusNotFound)
-		// 写入响应内容
-		w.Write([]byte("404 Not Found"))
-		return
+	// if !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/octet-stream") {
+	// 	// 设置响应的状态码为 404
+	// 	w.WriteHeader(http.StatusNotFound)
+	// 	// 写入响应内容
+	// 	w.Write([]byte("404 Not Found"))
+	// 	return
+	// }
+	// 获取 Content-Length 头字段
+	contentLength, err := strconv.Atoi(resp.Header.Get("Content-Length"))
+	if err != nil {
+	    log.Println("获取Content-Length出错:", err)
+	    return
 	}
+
 	// 读取前512个字节以用于文件类型检测
-	buffer := make([]byte, 10*1024*1024)
+	// buffer := make([]byte, 30*1024*1024) // 30 MB
+	// 根据 Content-Length 设置缓冲区大小
+	buffer := make([]byte, contentLength)
 	n, err := resp.Body.Read(buffer)
 	if err != nil && err != io.ErrUnexpectedEOF {
 		log.Println("读取响应主体数据时发生错误:", err)
@@ -115,17 +130,28 @@ func D(w http.ResponseWriter, r *http.Request) {
 	if string(buffer[:12]) == "tgstate-blob" {
 		content := string(buffer)
 		lines := strings.Fields(content)
-		log.Println("分块文件:" + lines[1])
+		if len(lines) < 2 {
+	        log.Println("分片信息格式错误")
+	        return
+	    }
+
+	    fileName = strings.TrimSpace(lines[1])
+	    log.Println("分块文件:", fileName)
+		// log.Println("分块文件:" + lines[1])
+
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", "attachment; filename=\""+lines[1]+"\"")
+		// w.Header().Set("Content-Disposition", "attachment; filename=\""+lines[1]+"\"")
+		// 将文件名设置到Content-Disposition标头
+		w.Header().Set("Content-Disposition", "attachment; filename=\""+fileName+"\"")
+
 		for i := 2; i < len(lines); i++ {
 			blobResp, err := http.Get(utils.GetDownloadUrl(strings.ReplaceAll(lines[i], " ", "")))
 			if err != nil {
 				http.Error(w, "Failed to fetch content", http.StatusInternalServerError)
 				return
 			}
-			// 将文件名设置到Content-Disposition标头
-			blobResp.Header.Set("Content-Disposition", "attachment; filename=\""+lines[1]+"\"")
+
+			// log.Println(lines[i] + ":", blobResp)
 			defer blobResp.Body.Close()
 			_, err = io.Copy(w, blobResp.Body)
 			if err != nil {
@@ -133,8 +159,12 @@ func D(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		time.Sleep(10 * time.Second)
+		// log.Println("完成...")
+		// time.Sleep(10 * time.Second)
+		// time.Sleep(1 * time.Second)
 	} else {
+		w.Header().Set("Content-Disposition", "inline; filename="+fileName)
+
 		// 使用DetectContentType函数检测文件类型
 		w.Header().Set("Content-Type", http.DetectContentType(buffer))
 		_, err = w.Write(buffer[:n])
@@ -153,9 +183,9 @@ func D(w http.ResponseWriter, r *http.Request) {
 
 // Index 首页
 func Index(w http.ResponseWriter, r *http.Request) {
-	htmlPath := "templates/images.tmpl"
+	htmlPath := TemplatesPath + "/images.tmpl"
 	if conf.Mode == "p" {
-		htmlPath = "templates/files.tmpl"
+		htmlPath = TemplatesPath + "/files.tmpl"
 	}
 	file, err := assets.Templates.ReadFile(htmlPath)
 	if err != nil {
@@ -163,14 +193,14 @@ func Index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 读取头部模板
-	headerFile, err := assets.Templates.ReadFile("templates/header.tmpl")
+	headerFile, err := assets.Templates.ReadFile(TemplatesPath + "/header.tmpl")
 	if err != nil {
 		http.Error(w, "Header template not found", http.StatusNotFound)
 		return
 	}
 
 	// 读取页脚模板
-	footerFile, err := assets.Templates.ReadFile("templates/footer.tmpl")
+	footerFile, err := assets.Templates.ReadFile(TemplatesPath + "/footer.tmpl")
 	if err != nil {
 		http.Error(w, "Footer template not found", http.StatusNotFound)
 		return
@@ -209,13 +239,13 @@ func Index(w http.ResponseWriter, r *http.Request) {
 func Pwd(w http.ResponseWriter, r *http.Request) {
 	// 输出 HTML 表单
 	if r.Method != http.MethodPost {
-		file, err := assets.Templates.ReadFile("templates/pwd.tmpl")
+		file, err := assets.Templates.ReadFile(TemplatesPath + "/pwd.tmpl")
 		if err != nil {
 			http.Error(w, "HTML file not found", http.StatusNotFound)
 			return
 		}
 		// 读取头部模板
-		headerFile, err := assets.Templates.ReadFile("templates/header.tmpl")
+		headerFile, err := assets.Templates.ReadFile(TemplatesPath + "/header.tmpl")
 		if err != nil {
 			http.Error(w, "Header template not found", http.StatusNotFound)
 			return

@@ -1,200 +1,384 @@
 {{define "public/footer"}}
-<script>
-    function uploadFile(file) {
-        //var limit = 10 * 1024 * 1024;
-        let limit = 2 * 1024 * 1024 * 1024; // 2G
-        if (file.size <= limit) {
-            uploadImg(file, 1).then((url) => {
-                // 处理上传成功的情况
-                console.log(url);
-            }).catch((error) => {
-                // 处理上传失败的情况
-                console.error(error);
-            });
-        } else {
-            // 文件大于20MB，需要分割成多个块
-            var chunkSize = limit; // 20MB
-            var start = 0;
-            var end = Math.min(chunkSize, file.size);
-            function uploadNextChunk() {
-                if (start < file.size) {
-                    var chunk = file.slice(start, end);
-                    return uploadImg(chunk, 0)
-                        .then((url) => {
-                            // 处理上传成功的情况
-                            temp = temp + '\n' + url.replace(/^\/d\//, ''); // 每次改变值都换行
-                            start = end;
-                            end = Math.min(start + chunkSize, file.size);
-                            return uploadNextChunk(); // 上传下一个块
-                        })
-                        .catch((error) => {
-                            // 处理上传失败的情况
-                            console.error(error);
-                            var t = $('<div class="response-item response-error">上传失败(' + e.message + ')</div>');
-                            $("#response").prepend(t);
-                            return Promise.reject("Upload failed"); // 终止上传
-                        });
-                } else {
-                    return Promise.resolve(); // 如果所有块都上传完成，返回一个已解决的 Promise
-                }
+<script defer>
+    const $uploadButton = document.getElementById("uploadButton");
+    const $response = document.getElementById("response");
+    const $loading = document.getElementById("loading");
+    const $uploadFile = document.getElementById("uploadFile");
+    const $uploadFileLabel = document.getElementById("uploadFileLabel");
+    const $copyCodeButtons_text = ".copy-code"
 
-            }
-            var temp = "tgstate-blob";
-            temp = temp + '\n' + file.name;
-            uploadNextChunk()
+    function uploadFile(file) {
+        const SizeThreshold = 20 * 1024 * 1024; // 分包大小阀值
+        const retryCount = 5; // 重试次数
+        const retryDelay = 2000; // 重试延迟(ms)
+        const file_name = file.name; // 文件名
+
+        const handleSuccess = (url) => console.log(url);
+        const handleFailure = (error) => {
+            console.error(error);
+            const errorMessage = `上传失败(${error.message})`;
+            $response.prepend(createResponseElement(errorMessage, "response-error"));
+            return Promise.reject("Upload failed");
+        };
+
+        if (file.size <= SizeThreshold) {
+            uploadImg(file, 1)
+                .then(handleSuccess)
+                .catch(handleFailure);
+        } else {
+            let start = 0;
+            let end = SizeThreshold;
+            let temp = `tgstate-blob\n${file_name}`;
+            let RetryMessage;
+
+            const uploadNextChunk = (start, end, retries = 0) => {
+                if (start < file.size) {
+                    const chunk = file.slice(start, end);
+                    return uploadImg(chunk, 0, RetryMessage).then(
+                        (url) => {
+                            // temp += `\n${url.replace(/^\/d\//, '')}`;
+                            temp += `\n${url.substring(14)}`; // "/api/download/".length 为14
+                            start = end;
+                            end = Math.min(start + SizeThreshold, file.size);
+                            return uploadNextChunk(start, end);
+                        },
+                        (error) => {
+                            if (retries < retryCount) {
+                                RetryMessage = `${file_name}上传块失败，${retryDelay / 1000}秒后重试 (${retries + 1}/${retryCount})`
+                                console.warn(RetryMessage);
+                                return new Promise((resolve) => setTimeout(resolve, retryDelay)).then(() =>
+                                    uploadNextChunk(start, end, retries + 1)
+                                );
+                                return uploadNextChunk(start, end, retries + 1);
+                            } else {
+                                console.error(`${file_name}上传块失败，已达到最大重试次数 (${retryCount})`);
+                                throw error;
+                            }
+                        }
+                    );
+                } else {
+                    return Promise.resolve();
+                }
+            };
+
+            uploadNextChunk(start, end)
                 .then(() => {
-                    console.log(temp); // 所有块上传完成后打印
-                    // 将字符串转换为 Blob 对象
-                    var blob = new Blob([temp], { type: 'text/plain' });
-                    var fileAll = new File([blob], 'fileAll.txt', { type: 'text/plain' });
+                    console.log(temp);
+                    const blob = new Blob([temp], { type: 'text/plain' });
+                    const fileAll = new File([blob], `${file_name}_fileAll.txt`, { type: 'text/plain' });
                     return uploadImg(fileAll, 1);
                 })
-                .catch((error) => {
-                    // 处理上传失败的情况
-                    console.error(error);
-                });
+                .catch(handleFailure);
         }
     }
-    function uploadImg(e, ms) {
-        return new Promise((resolve, reject) => {
-            var o = new FormData();
-            o.append("image", e);
-            var isImage = e.type.startsWith('image/');
-            $("#uploadButton").prop("disabled", !0);
-            $("#uploadButton").text("上传中");
-            $("#loading").show();
-            var a = window.location.protocol + "//" + window.location.hostname;
-            "80" !== window.location.port &&
-                0 < window.location.port.length &&
-                (a = a + ":" + window.location.port),
-                $.ajax({
-                    type: "POST",
-                    url: a + "/api",
-                    data: o,
-                    contentType: !1,
-                    processData: !1,
-                    success: function (e) {
-                        var link = a + e.message;
-                        var t;
-                        if (e.code == 1) {
-                            if (ms) {
-                                if (isImage) {
-                                    t = $(
-                                        '<div class="response-item response-success">上传成功，图片外链：<a target="_blank" href="' +
-                                        link +
-                                        '">' +
-                                        link +
-                                        '</a><div class="copy-links"><span class="copy-code" data-clipboard-text="&lt;img src=&quot;' +
-                                        link +
-                                        '&quot; alt=&quot;Your Alt Text&quot;&gt;">HTML</span><span class="copy-code" data-clipboard-text="![Alt Text](' +
-                                        link +
-                                        ')">Markdown</span><span class="copy-code" data-clipboard-text="[img]' +
-                                        link +
-                                        '[/img]">BBCode</span></div></div>'
-                                    );
-                                } else {
-                                    t = $(
-                                        '<div class="response-item response-success">上传成功，文件外链：<a target="_blank" href="' +
-                                        link +
-                                        '">' +
-                                        link +
-                                        "</a></div>"
-                                    );
-                                }
-                            }
-                            resolve(e.message);
-                        } else {
-                            var t = $('<div class="response-item response-error">上传失败(' + e.message + ')</div>');
-                            reject("上传失败(" + e.message + ")");
-                        }
-                        $("#response").prepend(t);
-                        $("#uploadFile").val("");
-                        $("#uploadFileLabel")
-                            .text("选择文件")
-                            .css("background-color", "#007BFF");
 
-                        $(".copy-code").click(function () {
-                            var code = $(this).data("clipboard-text");
-                            var input = $("<input>");
-                            $("body").append(input);
-                            input.val(code).select();
-                            document.execCommand("copy");
-                            input.remove();
-                            var copyButton = $(this);
-                            var originalText = copyButton.text();
-                            copyButton.text("复制成功");
-                            setTimeout(function () {
-                                copyButton.text(originalText);
-                            }, 1000);
-                        });
-                        return e.message;
+    function uploadImg(file, showSuccessMessage, CustomMessage) {
+        const file_name = file.name; // 文件名
+
+        // 创建并返回一个 Promise 对象，用于异步处理上传逻辑
+        return new Promise((resolve, reject) => {
+            // 创建 FormData 对象，用于将文件数据传递给服务器
+            const formData = new FormData();
+            formData.append("file", file);
+
+            // 获取文件类型并检查是否为图片
+            const isImage = file.type.startsWith('image/');
+
+            // 禁用上传按钮，显示上传中状态
+            $uploadButton.disabled = true;
+            $uploadButton.textContent = `${file_name}上传中`;
+            $loading.style.display = "block";
+
+            // 构建服务器请求的 URL
+            const serverUrl = window.location.origin;
+
+            // 使用 Fetch API 替代 jQuery 的 $.ajax
+            fetch(`${serverUrl}/api`, {
+                    method: "POST",
+                    body: formData,
+                    headers: {
+                        // 不设置 Content-Type，让浏览器自动处理
                     },
-                    error: function () {
-                        var errorResponse = $('<div class="response-item response-error">上传失败</div>');
-                        $("#response").prepend(errorResponse);
-                        reject("上传失败");
-                    },
-                    complete: function () {
-                        $("#uploadButton").prop("disabled", !1);
-                        $("#uploadButton").text("上传");
-                        $("#loading").hide();
+                })
+                .then(response => response.json())
+                .then(response => {
+                    const link = `${serverUrl}${response.message}?filename=${file_name}`;
+                    const responseElement = document.createElement('div');
+
+                    if (response.code === 1) {
+                        if (showSuccessMessage) {
+                            if (isImage) {
+                                responseElement.className = "response-item response-success";
+                                responseElement.innerHTML = `${file_name}上传成功，图片外链：<a target="_blank" href="${link}">${link}</a><div class="copy-links">
+                                        <span class="copy-code" data-clipboard-text="&lt;img src=&quot;${link}&quot; alt=&quot;Your Alt Text&quot;&gt;">HTML</span>
+                                        <span class="copy-code" data-clipboard-text="![Alt Text](${link})">Markdown</span>
+                                        <span class="copy-code" data-clipboard-text="[img]${link}[/img]">BBCode</span>
+                                    </div>`;
+                            } else {
+                                responseElement.className = "response-item response-success";
+                                responseElement.innerHTML = `${file_name}上传成功，文件外链：<a target="_blank" href="${link}">${link}</a>`;
+                            }
+                        }
+                        resolve(response.message);
+                    } else {
+                        responseElement.className = "response-item response-error";
+                        responseElement.textContent = CustomMessage || `${file_name}上传失败(${response.message})`;
+                        reject(`${file_name}上传失败(${response.message})`);
                     }
+
+                    // $response.appendChild(responseElement);
+                    // $response.insertBefore(responseElement, $response.firstChild);
+                    if (responseElement.className) {
+                        $response.prepend(responseElement);
+                    }
+                    $uploadFile.value = "";
+                    $uploadFileLabel.textContent = "选择文件或拖拽到此区域";
+                    $uploadFileLabel.style.backgroundColor = "#007BFF";
+
+                    // 处理复制代码按钮点击事件
+                    document.querySelectorAll($copyCodeButtons_text).forEach(function(button) {
+                        button.addEventListener("click", function() {
+                            let code = this.dataset.clipboardText;
+                            let input = document.createElement("input");
+                            document.body.appendChild(input);
+                            input.value = code;
+                            input.select();
+                            document.execCommand("copy");
+                            document.body.removeChild(input);
+
+                            let copyButton = this;
+                            let originalText = copyButton.textContent;
+                            copyButton.textContent = "复制成功";
+                            setTimeout(function() {
+                                copyButton.textContent = originalText;
+                            }, 500);
+                        });
+                    });
+
+                    return response.message;
+                })
+                .catch(error => {
+                    let errorElement = document.createElement('div');
+                    errorElement.className = "response-item response-error";
+                    errorElement.textContent = `${file_name}上传失败`;
+                    $response.appendChild(errorElement);
+                    reject(`${file_name}上传失败`);
+                })
+                .finally(() => {
+                    $uploadButton.disabled = false;
+                    $uploadButton.textContent = "上传";
+                    $loading.style.display = "none";
                 });
+
+            // 使用 jQuery 发送 AJAX 请求
+            // $.ajax({
+            //     type: "POST",
+            //     url: `${serverUrl}/api`,
+            //     data: formData,
+            //     contentType: false,
+            //     processData: false,
+            //     success: function(response) {
+            //         const link = `${serverUrl}${response.message}`;
+            //         let responseElement;
+
+            //         if (response.code === 1) {
+            //             // 上传成功的处理逻辑
+            //             if (showSuccessMessage) {
+            //                 if (isImage) {
+            //                     responseElement = $('<div class="response-item response-success">上传成功，图片外链：<a target="_blank" href="' +
+            //                         link +
+            //                         '">' +
+            //                         link +
+            //                         '</a><div class="copy-links"><span class="copy-code" data-clipboard-text="&lt;img src=&quot;' +
+            //                         link +
+            //                         '&quot; alt=&quot;Your Alt Text&quot;&gt;">HTML</span><span class="copy-code" data-clipboard-text="![Alt Text](' +
+            //                         link +
+            //                         ')">Markdown</span><span class="copy-code" data-clipboard-text="[img]' +
+            //                         link +
+            //                         '[/img]">BBCode</span></div></div>'
+            //                     );
+            //                 } else {
+            //                     responseElement = $('<div class="response-item response-success">上传成功，文件外链：<a target="_blank" href="' +
+            //                         link +
+            //                         '">' +
+            //                         link +
+            //                         "</a></div>"
+            //                     );
+            //                 }
+            //             }
+            //             resolve(response.message);
+            //         } else {
+            //             // 上传失败的处理逻辑
+            //             responseElement = $(`<div class="response-item response-error">上传失败(${response.message})</div>`);
+            //             reject(`上传失败(${response.message})`);
+            //         }
+
+            //         // 将响应元素添加到页面，并进行相应的 UI 更新
+            //         $response.prepend(responseElement);
+            //         $uploadFile.val("");
+            //         $uploadFileLabel
+            //             .text("选择文件")
+            //             .css("background-color", "#007BFF");
+
+            //         // 复制代码到剪贴板并显示成功信息
+            //         $copy_code.click(function() {
+            //             let code = $(this).data("clipboard-text");
+            //             let input = $("<input>");
+            //             $("body").append(input);
+            //             input.val(code).select();
+            //             document.execCommand("copy");
+            //             input.remove();
+            //             let copyButton = $(this);
+            //             let originalText = copyButton.text();
+            //             copyButton.text("复制成功");
+            //             setTimeout(function() {
+            //                 copyButton.text(originalText);
+            //             }, 500);
+            //         });
+
+            //         return response.message;
+            //     },
+            //     error: function() {
+            //         // 处理 AJAX 请求错误
+            //         let errorResponse = $('<div class="response-item response-error">上传失败</div>');
+            //         $response.prepend(errorResponse);
+            //         reject("上传失败");
+            //     },
+            //     complete: function() {
+            //         // 恢复上传按钮状态，隐藏加载状态
+            //         $uploadButton.prop("disabled", false).text("上传");
+            //         $loading.hide();
+            //     }
+            // });
+
         });
     }
+
     function readAndUploadFile(file) {
-        var reader = new FileReader();
-        reader.onload = function (e) {
-            // e.target.result 包含读取的文件内容
-            var fileContent = e.target.result;
+        // 创建FileReader实例
+        const reader = new FileReader();
+
+        // 设置当读取完成时的回调函数
+        reader.onload = function(event) {
+            // event.target.result 包含读取的文件内容
+            const fileContent = event.target.result;
             // 调用上传文件的函数
             uploadFile(file, fileContent);
         };
+
         // 以文本形式读取文件内容
         reader.readAsText(file);
     }
-    document.addEventListener("paste", function (e) {
-        for (var o = e.clipboardData.items, t = 0; t < o.length; t++) {
-            var a,
-                n = o[t];
-            -1 !== n.type.indexOf("image") &&
-                ((a = n.getAsFile()),
-                    $("#uploadFileLabel")
-                        .text("已选择剪贴板文件")
-                        .css("background-color", "#0056b3"),
-                    uploadFile(a));
-        }
-    }),
-        $(document).ready(function () {
-            $("#uploadFile").change(function () {
-                var files = $(this)[0].files;
-                if (files.length > 0) {
-                    if (files.length === 1) {
-                        $("#uploadFileLabel")
-                            .text("已选择文件: " + files[0].name)
-                            .css("background-color", "#0056b3");
-                    } else {
-                        $("#uploadFileLabel")
-                            .text("已选择多个文件")
-                            .css("background-color", "#0056b3");
-                    }
-                } else {
-                    $("#uploadFileLabel")
-                        .text("选择文件")
-                        .css("background-color", "#007BFF");
-                }
-            });
-            $("#uploadButton").click(function () {
-                var input = document.getElementById("uploadFile");
-                if (input.files.length > 0) {
-                    for (var i = 0; i < input.files.length; i++) {
-                        readAndUploadFile(input.files[i]);
-                    }
-                } else {
-                    alert("请选择一个文件");
-                }
-            });
+
+
+    // document.addEventListener("paste", function (event) {
+    //     // 获取剪贴板中的所有项目
+    //     let items = (event.clipboardData || event.originalEvent.clipboardData).items;
+
+    //     // 遍历剪贴板中的每个项目
+    //     for (let i = 0; i < items.length; i++) {
+    //         let item = items[i];
+
+    //         // 检查是否是图片类型
+    //         if (item.type.indexOf("image") !== -1) {
+    //             // 获取剪贴板中的图片文件
+    //             let file = item.getAsFile();
+
+    //             // 更新文件上传标签，并调用上传文件的函数
+    //             $uploadFileLabel.textContent = "已选择剪贴板文件";
+    //             $uploadFileLabel.style.backgroundColor = "#0056b3";
+    //             uploadFile(file);
+    //         }
+    //     }
+    // });
+
+
+    document.addEventListener("DOMContentLoaded", function() {
+        // 处理文件选择变化事件
+        $uploadFile.addEventListener("change", function() {
+            handleFileSelection(this.files);
         });
+
+        // 处理上传按钮点击事件
+        $uploadButton.addEventListener("click", function() {
+            if ($uploadFile.files.length > 0) {
+                // 遍历选择的文件，并读取并上传
+                for (let i = 0; i < $uploadFile.files.length; i++) {
+                    readAndUploadFile($uploadFile.files[i]);
+                }
+            } else {
+                // 没有选择文件时，显示警告
+                alert("请至少选择一个文件");
+            }
+        });
+
+        // 记录拖拽计数
+        let dragCount = 0;
+        document.documentElement.addEventListener("dragover", function(event) {
+            // 在拖拽的元素在目标区域内移动时,阻止浏览器默认的文件拖拽行为
+            event.preventDefault();
+        });
+
+        document.documentElement.addEventListener("dragenter", function(event) {
+            // 在拖拽的元素进入目标区域时,阻止浏览器默认的文件拖拽行为
+            event.preventDefault();
+
+            // 只有在首次进入拖拽区域时才改变样式
+            if (dragCount === 0) {
+                document.documentElement.style.backgroundColor = "rgba(0, 123, 255, 0.1)";
+            }
+
+            // 增加拖拽计数
+            dragCount++;
+        });
+
+        document.documentElement.addEventListener("dragleave", function(event) {
+            // 减少拖拽计数
+            dragCount--;
+
+            // 只有当所有拖拽元素从目标区域移出后,才还原样式
+            if (dragCount === 0) {
+                document.documentElement.style.backgroundColor = "transparent";
+            }
+        });
+
+        document.documentElement.addEventListener("drop", function(event) {
+            // 在将拖拽元素释放到目标区域时,阻止浏览器默认的文件拖拽行为
+            event.preventDefault();
+
+            // 在拖拽结束时还原样式
+            document.documentElement.style.backgroundColor = "transparent";
+
+            // 将拖拽的文件赋值给上传文件输入框
+            $uploadFile.files = event.dataTransfer.files;
+
+            // 处理文件选择和拖拽的共用函数
+            handleFileSelection(event.dataTransfer.files);
+
+            // 重置拖拽计数
+            dragCount = 0;
+        });
+
+    });
+
+    function handleFileSelection(files) {
+        if (files.length > 0) {
+            if (files.length === 1) {
+                // 更新文件上传标签，显示已选择的单个文件
+                $uploadFileLabel.textContent = "已选择文件: " + files[0].name;
+                $uploadFileLabel.style.backgroundColor = "#0056b3";
+            } else {
+                // 更新文件上传标签，显示已选择多个文件
+                $uploadFileLabel.textContent = "已选择多个文件";
+                $uploadFileLabel.style.backgroundColor = "#0056b3";
+            }
+        } else {
+            // 没有选择文件时，恢复默认标签样式
+            $uploadFileLabel.textContent = "选择文件或拖拽到此区域";
+            $uploadFileLabel.style.backgroundColor = "#007BFF";
+        }
+    }
+
 </script>
 </body>
 

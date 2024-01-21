@@ -1,15 +1,13 @@
 tgState
 ==
 
-已知问题(未修复): 分割上传后,下载回的文件不完整.
-
-缓解解决: 将分割大小调整为2GB,小于2GB文件不进行分割上传.
-
 一款以Telegram作为储存的文件外链系统
+
+本fork版: `已修复原作者分包下载异常报错,报错原因: Request Entity Too Large` 及其他部分优化和改进.
 
 <del>不限制文件大小和格式.</del>
 
-虽然说不限制,但实际上,超过2GB文件会分割上传,且受限于链路中各个环节对POST请求体大小的限制,故实际可上传大小请结合实际情况.
+虽然说不限制,但实际上,(为了能够分包下载,因为[官方限制:下载文件大小不能超过20MB](https://core.telegram.org/bots/faq#handling-media))超过20MB文件会分割上传,且受限于链路中各个环节对POST请求体大小的限制,故实际可上传大小请结合实际情况.
 
 可以作为telegram图床,亦可作为telegram网盘使用
 
@@ -81,7 +79,8 @@ curl https://codeload.github.com/LanYunDev/tgState/zip/refs/heads/main -
 -output main.zip
 unzip main.zip
 cd tgState-main
-go build
+go build -ldflags "-w -s"
+# Debug模式: go build -gcflags "all=-N -l"
 ```
 
 ## 二进制
@@ -113,14 +112,12 @@ nohup ./tgstate 参数 &
 
 参考[源项目](https://github.com/csznet/tgState)
 
-之后用命令`docker cp <本地二进制路径> <容器ID或容器名称>:/app/tgState`替换二进制文件.
-
-## Vercel
-
-参考[源项目](https://github.com/csznet/tgState)
+之后用命令 `docker cp <本地二进制路径> <容器ID或容器名称>:/app/tgState` 替换二进制文件.
 
 # API说明
 
-POST方法到路径```/api```
+POST方法路径: `/api`
 
 表单传输，字段名为image，内容为二进制数据
+
+文件下载路径: `/api/download/`

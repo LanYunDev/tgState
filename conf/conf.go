@@ -11,4 +11,4 @@ type UploadResponse struct {
 	Message string `json:"message"`
 }
 
-const FileRoute = "/d/"
+const FileRoute = "/api/download/"

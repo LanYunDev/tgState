@@ -33,12 +33,21 @@ func web() {
 		}
 		http.HandleFunc("/api", control.Middleware(control.UploadImageAPI))
 		http.HandleFunc("/", control.Middleware(control.Index))
+		//favicon.ico 重定向
+		http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "https://lanyundev.com/favicon.ico", http.StatusPermanentRedirect)
+		})
 	}
 
 	if listener, err := net.Listen("tcp", ":"+webPort); err != nil {
 		fmt.Printf("端口 %s 已被占用\n", webPort)
 	} else {
-		defer listener.Close()
+		defer func(listener net.Listener) {
+			err := listener.Close()
+			if err != nil {
+				fmt.Println(err)
+			}
+		}(listener)
 		fmt.Printf("启动Web服务器，监听端口 %s\n", webPort)
 		if err := http.Serve(listener, nil); err != nil {
 			fmt.Println(err)

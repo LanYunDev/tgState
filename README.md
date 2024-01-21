@@ -1,29 +1,19 @@
 tgState
 ==
 
-[English](https://github.com/csznet/tgState/blob/main/README_en.md) 
+已知问题(未修复): 分割上传后,下载回的文件不完整.
+
+缓解解决: 将分割大小调整为1GB,小于1GB文件不进行分割上传.
 
 一款以Telegram作为储存的文件外链系统
 
-不限制文件大小和格式
+<del>不限制文件大小和格式.</del>
 
-可以作为telegram图床，也可以作为telegram网盘使用。
+虽然说不限制,但实际上,超过1GB文件会分割上传,且受限于链路中各个环节对POST请求体大小的限制,故实际可上传大小请结合实际情况.
+
+可以作为telegram图床,亦可作为telegram网盘使用
 
 支持web上传文件和telegram直接上传
-
-搭配CLoudFlare使用：https://www.csz.net/proj/tgstate/
-
-如有疑惑，可以咨询TG @tgstate123  
-
-# 演示
-
-https://tgstate.vercel.app / https://tgstate.ikun123.com/
-
-搭建在vercel，资源限制，大于5MB的文件不支持
-
-演示图片：
-
-![tgState](https://tgstate.vercel.app/d/BQACAgUAAx0EcyK3ugACByxlOR-Nfl4esavoO4zdaYIP_k1KYQACDAsAAkf4yFVpf_awaEkS8jAE)  
 
 # 参数说明
 
@@ -82,67 +72,48 @@ bot获取FileID的前置域名地址自动补充
 
 # 部署
 
+## 编译(推荐)
+
+确保已经安装`go`
+
+```
+curl https://codeload.github.com/LanYunDev/tgState/zip/refs/heads/main -
+-output main.zip
+unzip main.zip
+cd tgState-main
+go build
+```
+
 ## 二进制
 
 Linux amd64下载
 
 ```
-wget https://github.com/csznet/tgState/releases/latest/download/tgState.zip && unzip tgState.zip && rm tgState.zip
+wget https://github.com/LanYunDev/tgState/releases/latest/download/tgstate.zip && unzip tgstate.zip && rm tgstate.zip
 ```
-
-Linux arm64下载
-
-```
-wget https://github.com/csznet/tgState/releases/latest/download/tgState_arm64.zip && unzip tgState_arm64.zip && rm tgState_arm64.zip
-```
-
-Linux 一键脚本
-
-```
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/csznet/tgState/main/get.sh)"
-```
-
 
 **使用方法**
 
 ```
- ./tgState 参数
+ ./tgstate 参数
 ```
 
 **例子**
 ```
- ./tgState -token xxxx -target @xxxx
+ ./tgstate -token xxxx -target @xxxx
 ```
 
 **后台运行**
 
 ```
-nohup ./tgState 参数 &
+nohup ./tgstate 参数 &
 ```
 
 ## Docker
 
-pull镜像
-```
-docker pull csznet/tgstate:latest
-```
+参考[源项目](https://github.com/csznet/tgState)
 
-启动
-```
-docker run -d -p 8088:8088 --name tgstate 参数 --net=host csznet/tgstate:latest
-```
-其中docker的参数需要设置为环境变量
-
-开机自启需要加上
-```
---restart always
-```
-
-
-**例子**
-```
-docker run -d -p 8088:8088 --name tgstate -e token=aaa -e target=@bbb --net=host csznet/tgstate:latest
-```
+之后用命令`docker cp <本地二进制路径> <容器ID或容器名称>:/app/tgState`替换二进制文件.
 
 ## Vercel
 

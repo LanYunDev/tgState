@@ -2,7 +2,7 @@
 <script>
     function uploadFile(file) {
         //var limit = 10 * 1024 * 1024;
-        let limit = 1024 * 1024 * 1024; // 1G
+        let limit = 2 * 1024 * 1024 * 1024; // 2G
         if (file.size <= limit) {
             uploadImg(file, 1).then((url) => {
                 // 处理上传成功的情况

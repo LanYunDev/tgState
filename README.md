@@ -117,9 +117,7 @@ nohup ./tgstate 参数 &
 
 ## Vercel
 
-不支持大于5mb文件，不支持tg获取文件路径
-
- [点我传送至Vercel配置页面](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcsznet%2FtgState&env=token&env=target&env=pass&env=mode&project-name=tgState&repository-name=tgState)  
+参考[源项目](https://github.com/csznet/tgState)
 
 # API说明
 

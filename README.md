@@ -1,17 +1,15 @@
 tgState
 ==
 
-一款以Telegram作为储存的文件外链系统
+一款以Telegram作为储存的**文件📃**外链系统.可作为telegram图床,亦可作为telegram网盘使用.
+
+支持通过Web前端上传文件或通过Telegram向机器人发送文件进行上传.
 
 本fork版: `已修复原作者分包下载异常报错,报错原因: Request Entity Too Large` 及其他部分优化和改进.
 
 <del>不限制文件大小和格式.</del>
 
-虽然说不限制,但实际上,(为了能够分包下载,因为[官方限制:下载文件大小不能超过20MB](https://core.telegram.org/bots/faq#handling-media))超过20MB文件会分割上传,且受限于链路中各个环节对POST请求体大小的限制,故实际可上传大小请结合实际情况.
-
-可以作为telegram图床,亦可作为telegram网盘使用
-
-支持web上传文件和telegram直接上传
+实际上,(为了能够分包下载,因为[官方限制:下载文件大小不能超过20MB](https://core.telegram.org/bots/faq#handling-media))超过20MB文件会在前端进行分割上传(过大的单文件需确保内存够用),后端也会对超过20MB文件打断上传,且受限于请求链路中各个环节对POST请求体大小的限制,另外记录分割数量的文件大小也不能超过20MB(即单文件不能超过约5.3T),故实际可上传大小请结合实际情况.
 
 # 参数说明
 
@@ -118,6 +116,6 @@ nohup ./tgstate 参数 &
 
 POST方法路径: `/api`
 
-表单传输，字段名为image，内容为二进制数据
+表单传输，字段名为`file`，内容为二进制数据
 
 文件下载路径: `/api/download/`

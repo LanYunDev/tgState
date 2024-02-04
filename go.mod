@@ -1,4 +1,4 @@
-module csz.net/tgstate
+module lanyundev/tgstate
 
 go 1.21
 

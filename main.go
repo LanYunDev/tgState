@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"os"
 
-	"csz.net/tgstate/conf"
-	"csz.net/tgstate/control"
-	"csz.net/tgstate/utils"
+	"lanyundev/tgstate/conf"
+	"lanyundev/tgstate/control"
+	"lanyundev/tgstate/utils"
 )
 
 var webPort string
@@ -26,12 +26,12 @@ func main() {
 }
 
 func web() {
-	http.HandleFunc(conf.FileRoute, control.D)
+	http.HandleFunc(conf.FileRoute, control.DownloadAPI)
 	if OptApi {
 		if conf.Pass != "" && conf.Pass != "none" {
 			http.HandleFunc("/pwd", control.Pwd)
 		}
-		http.HandleFunc("/api", control.Middleware(control.UploadImageAPI))
+		http.HandleFunc("/api", control.Middleware(control.UploadAPI))
 		http.HandleFunc("/", control.Middleware(control.Index))
 		//favicon.ico 重定向
 		http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {

@@ -24,9 +24,7 @@ const uploadFile = (file) => {
 
     const handleSuccess = (url) => console.log(`${file_name}: ${serverUrl}${url}`);
     const handleFailure = (error) => {
-        // 恢复上传按钮状态
-        $uploadButton.disabled = false;
-        $uploadButton.textContent = "点击上传";
+        recoverUploadButton();
 
         console.error('上传失败! ', error);
         return Promise.reject("上传失败! ", error);
@@ -48,13 +46,13 @@ const uploadFile = (file) => {
             if (start < file.size) {
                 // 获取当前文件块
                 const chunk = file.slice(start, end);
-                
+
                 // 调用 handleFileUpload 函数上传文件块,并返回一个Promise
                 return handleFileUpload(chunk, 0, file_name, RetryMessage).then(
                     (url) => {
                         // 上传成功时,更新临时变量 temp
                         temp += `\n${url.substring(14)}`; // "/api/download/".length 为14
-                        
+
                         // 更新文件块起始和结束位置
                         start = end;
                         end = Math.min(start + SizeThreshold, file.size);
@@ -68,15 +66,15 @@ const uploadFile = (file) => {
                             // 如果还未达到最大重试次数,设置重试消息并进行重试
                             RetryMessage = `${file_name}上传块失败,${retryDelay / 1000}秒后重试 (${retries + 1}/${retryCount})`
                             console.warn(RetryMessage);
-                            creatErrorElement(file,file_name,RetryMessage,error)
-                            
+                            creatErrorElement(file, file_name, RetryMessage, error)
+
                             // 延迟指定时间后继续上传
                             return sleep(retryDelay).then(() => uploadNextChunk(start, end, retries + 1));
                         } else {
                             // 达到最大重试次数时,输出错误信息并启用上传按钮
                             RetryMessage = `${file_name}上传失败!已达到最大重试次数(${retryCount})!`
                             console.error(RetryMessage);
-                            creatErrorElement(file,file_name,RetryMessage,error)
+                            creatErrorElement(file, file_name, RetryMessage, error)
                             // 返回一个拒绝状态的Promise,以触发 catch 分支
                             return Promise.reject(RetryMessage);
                         }
@@ -100,7 +98,7 @@ const uploadFile = (file) => {
     }
 }
 
-const creatErrorElement = (file,file_name,CustomMessage,message) => {
+const creatErrorElement = (file, file_name, CustomMessage, message) => {
     const identifier = `${file_name}_${file.size}_${file.lastModified}`;
     const existingErrorElement = $response.querySelector(`.response-item.response-error[data-identifier="${identifier}"]`);
     const ErrorMessage = CustomMessage ? `${CustomMessage} (${message})` : `${file_name}上传失败! (${message})`;
@@ -114,6 +112,15 @@ const creatErrorElement = (file,file_name,CustomMessage,message) => {
         errorElement.textContent = ErrorMessage;
         $response.prepend(errorElement);
     }
+}
+
+const recoverUploadButton = () => {
+    // 恢复上传状态
+    $uploadFile.value = "";
+    $uploadFileLabel.textContent = "选择文件或拖拽到此区域";
+    $uploadFileLabel.style.backgroundColor = "#007BFF";
+    $uploadButton.disabled = false;
+    $uploadButton.textContent = "点击上传";
 }
 
 const handleFileUpload = (file, showSuccessMessage, file_name, CustomMessage) => {
@@ -155,21 +162,20 @@ const handleFileUpload = (file, showSuccessMessage, file_name, CustomMessage) =>
                                     <span class="copy-code" data-clipboard-text="${link}">复制外链</span>
                                 </div>`;
                         $response.prepend(responseElement);
-                        $uploadFile.value = "";
-                        $uploadFileLabel.textContent = "选择文件或拖拽到此区域";
-                        $uploadFileLabel.style.backgroundColor = "#007BFF";
 
-                        // 恢复上传按钮状态
-                        $uploadButton.disabled = false;
-                        $uploadButton.textContent = "点击上传";
+                        recoverUploadButton();
                     }
                 } else {
+                    if (response.message === undefined) {
+                        recoverUploadButton();
+                        response.message = "未返回JSON数据!"
+                    }
                     reject(response.message);
                 }
             })
             .catch(() => {
                 // 捕捉异常,处理上传失败逻辑
-                creatErrorElement(file,file_name,CustomMessage,response.message);
+                creatErrorElement(file, file_name, CustomMessage, response.message);
                 // $response.appendChild(errorElement);
                 // reject(errorElement.textContent);
             })
